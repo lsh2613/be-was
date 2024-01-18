@@ -1,6 +1,7 @@
 package controller;
 
 import controller.adapter.HandlerAdapter;
+import controller.adapter.StaticResourceHandlerAdapter;
 import controller.adapter.UserControllerHandlerAdapter;
 import controller.user.UserCreateController;
 import controller.user.UserFormController;
@@ -12,11 +13,12 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.logging.Logger;
 
 public class FrontController {
     private final Map<String, Object> handlerMappingMap = new HashMap<>();
     private final List<HandlerAdapter> handlerAdapters = new ArrayList<>();
-    static String DEFAULT_PAGE = "templates/index.html";
+    static String DEFAULT_PAGE = "/templates/index.html";
 
     public FrontController() {
         initHandlerMappingMap();
@@ -24,6 +26,11 @@ public class FrontController {
     }
 
     private void initHandlerMappingMap() {
+        handlerMappingMap.put("css", new StaticResourceController("css"));
+        handlerMappingMap.put("fonts", new StaticResourceController("fonts"));
+        handlerMappingMap.put("images", new StaticResourceController("images"));
+        handlerMappingMap.put("js", new StaticResourceController("js"));
+
         handlerMappingMap.put("/user/form.html", new UserFormController());
         handlerMappingMap.put("/user/create", new UserCreateController());
 
@@ -31,6 +38,7 @@ public class FrontController {
     }
 
     private void initHandlerAdapters() {
+        handlerAdapters.add(new StaticResourceHandlerAdapter());
         handlerAdapters.add(new UserControllerHandlerAdapter());
 
         //qna 추가
@@ -38,7 +46,6 @@ public class FrontController {
 
     public void service(Request request, OutputStream out) throws IOException {
         Object handler = getHandler(request);
-
         if (handler == null) {
             View view = viewResolver(DEFAULT_PAGE);
             view.render(request, out);
@@ -51,11 +58,16 @@ public class FrontController {
         String viewName = mv.getViewName();
         View view = viewResolver(viewName);
 
+        if (adapter instanceof StaticResourceHandlerAdapter) {
+            StaticResourceController staticResourceController = (StaticResourceController) handler;
+            view.render(request, out, staticResourceController.getType());
+            return;
+        }
         view.render(request, out);
     }
 
     private View viewResolver(String viewName) {
-        return new View("./src/main/resources/" + viewName);
+        return new View("./src/main/resources" + viewName);
     }
 
     private HandlerAdapter getHandlerAdapter(Object handler) {
@@ -69,7 +81,21 @@ public class FrontController {
 
     private Object getHandler(Request request) {
         String requestURI = request.getURI();
+        if (isResourceURI(requestURI)) {
+            return handlerMappingMap.get(extractResourceType(requestURI));
+        }
         return handlerMappingMap.get(requestURI);
+    }
+
+    private String extractResourceType(String requestURI) {
+        return requestURI.split("/")[1];
+    }
+
+    private boolean isResourceURI(String uri) {
+        return uri.startsWith("/css")
+                || uri.startsWith("/fonts")
+                || uri.startsWith("/images")
+                || uri.startsWith("/js");
     }
 
 }
